@@ -1,0 +1,48 @@
+{
+  "name": "ai-persona",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.93",
+    "@ai-sdk/anthropic": "^3.0.69",
+    "@ai-sdk/azure": "^3.0.53",
+    "@ai-sdk/google": "^3.0.62",
+    "@ai-sdk/openai": "^3.0.52",
+    "@ai-sdk/react": "^3.0.160",
+    "@supabase/supabase-js": "^2.103.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@vapi-ai/server-sdk": "^1.1.0",
+    "@vapi-ai/web": "^2.5.2",
+    "ai": "^6.0.158",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
+    "lucide-react": "^1.8.0",
+    "mermaid": "^11.14.0",
+    "next": "16.2.3",
+    "pg": "^8.20.0",
+    "pgvector": "^0.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-syntax-highlighter": "^16.1.1",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
