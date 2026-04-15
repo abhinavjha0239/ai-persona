@@ -5,7 +5,7 @@ import { MermaidDiagram } from "./chat/MermaidDiagram";
 // Pre-validated, static diagram — NOT LLM-generated
 const ARCHITECTURE_CHART = `flowchart TB
   subgraph Client["Client Layer"]
-    Voice["Voice Call<br/>(Vapi + Deepgram)"]
+    Voice["Voice Call<br/>(Vapi + Deepgram STT + Cartesia TTS)"]
     Chat["Chat UI<br/>(Next.js React)"]
   end
 
@@ -22,7 +22,7 @@ const ARCHITECTURE_CHART = `flowchart TB
   end
 
   subgraph LLM["LLM Layer"]
-    GPT["GPT-4.1<br/>(Azure OpenAI)"]
+    GPT["GPT-5.4-mini<br/>(Azure OpenAI)"]
   end
 
   subgraph KB["Knowledge Base (188 chunks)"]
@@ -32,12 +32,14 @@ const ARCHITECTURE_CHART = `flowchart TB
   end
 
   Voice --> VoiceAPI
+  VoiceAPI --> GPT
   Chat --> ChatAPI
   ChatAPI --> Embed
   Embed --> Search
   Search --> PG
   PG --> GPT
   ChatAPI --> GPT
+  VoiceAPI --> BookAPI
   ChatAPI --> BookAPI
   BookAPI --> Cal["Cal.com"]
   KB -.->|"ingested"| PG
