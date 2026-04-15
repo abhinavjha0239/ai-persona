@@ -242,6 +242,12 @@ export class VapiVoiceProvider implements VoiceProvider {
     const messageType = message?.type || data?.type;
 
     switch (messageType) {
+      case "assistant-request":
+        return {
+          type: "assistant_request",
+          data: { call: message?.call },
+        };
+
       case "function-call":
       case "tool-calls":
         return {
@@ -291,6 +297,9 @@ export class VapiVoiceProvider implements VoiceProvider {
       "RAG:2", "LLM:2", "pgvector:2", "Supabase:2", "Docker:2",
       "Kubernetes:2", "TypeScript:2", "Next.js:2", "Vercel:2",
       "gRPC:2", "WebSocket:2", "Redis:2", "PostgreSQL:2",
+      // Email domain keywords — boost recognition accuracy
+      "gmail:2", "outlook:2", "yahoo:2", "hotmail:2", "icloud:2",
+      "dot com:1", "at the rate:1",
     ];
 
     if (language === "multilingual" || language === "hi") {

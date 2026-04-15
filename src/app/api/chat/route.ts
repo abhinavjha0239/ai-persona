@@ -1,26 +1,38 @@
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
+import { streamText, convertToModelMessages, stepCountIs } from "ai";
+import type { UIMessage } from "ai";
 import { getChatModel } from "@/lib/ai/model";
 import { getChatSystemPrompt } from "@/lib/persona/prompts";
 import { retrieveContext } from "@/lib/rag/retriever";
-import { checkAvailability, createBooking } from "@/lib/booking/service";
-import { formatSlotsForChat } from "@/lib/persona/config";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { sanitizeName, sanitizeEmail, sanitizeText } from "@/lib/security/sanitize";
+import { chatTools } from "@/lib/ai/chat-tools";
 
 // ============================================================
-// Chat API Route (Streaming)
+// Chat API Route — Streaming + Real Tool Calling
 // ============================================================
 // POST /api/chat
-// Accepts UI messages, retrieves RAG context, and streams
-// a response using Vercel AI SDK v6 UIMessageStream protocol.
 //
-// Uses the configured LLM_PROVIDER (default: Azure OpenAI) + tool calling for booking.
+// Flow:
+//   1. Rate-limit by client IP
+//   2. Build conversation-aware RAG query from recent turns
+//   3. Retrieve grounding context from the vector store
+//   4. Convert UIMessages → ModelMessages (preserves tool call
+//      round-trips across turns)
+//   5. streamText with real tool definitions + agentic loop
+//
+// The model has two tools:
+//   - check_availability  → queries Cal.com for free slots
+//   - create_booking      → confirms a meeting on the calendar
+//
+// stopWhen: stepCountIs(4) lets the model:
+//   step 1 — call check_availability
+//   step 2 — read slots, call create_booking (or respond)
+//   step 3 — read booking result, compose final reply
+//   step 4 — hard ceiling (safety)
 // ============================================================
 
-
 export async function POST(req: NextRequest) {
-  // Rate limit
+  // ── Rate limiting ──────────────────────────────────────────
   const ip = getClientIp(req.headers);
   const rl = checkRateLimit(`chat:${ip}`, RATE_LIMITS.slots);
   if (!rl.allowed) {
@@ -36,32 +48,35 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const messages: { role: string; parts: { type: string; text?: string }[] }[] =
-      body.messages || [];
+      body.messages ?? [];
 
-    // Extract text from messages
+    // ── Build conversation-aware RAG query ─────────────────────
+    // Includes last 2 turns of context so "tell me more about that"
+    // finds the right knowledge chunks.
     const getText = (m: { parts: { type: string; text?: string }[] }) =>
-      m.parts?.filter((p) => p.type === "text").map((p) => p.text || "").join(" ") || "";
+      m.parts?.filter((p) => p.type === "text").map((p) => p.text ?? "").join(" ") ?? "";
 
     const lastUserMsg = messages.findLast((m) => m.role === "user");
     const lastUserText = lastUserMsg ? getText(lastUserMsg) : "";
 
-    // Build conversation-aware search query.
-    // If the user says "tell me more about that" or "explain the security model",
-    // we need recent conversation context to disambiguate.
     let searchQuery = lastUserText;
-    if (messages.length > 1 && lastUserText.trim()) {
+    // Only add conversation context when the query is ambiguous (short, or contains
+    // pronouns/references like "that", "it", "more", "same"). Direct factual questions
+    // (education, dates, project names) retrieve better without noisy prior-turn context.
+    const isAmbiguous = lastUserText.split(" ").length < 6
+      || /\b(that|it|this|more|same|those|them|there|above|previous)\b/i.test(lastUserText);
+    if (messages.length > 1 && lastUserText.trim() && isAmbiguous) {
       const recentContext = messages
-        .slice(-4) // last 2 turns (user+assistant pairs)
+        .slice(-4)
         .map((m) => {
           const text = getText(m);
           return text.length > 200 ? text.slice(0, 200) : text;
         })
         .join(" | ");
-      // Combine: recent context gives topic, last message gives intent
       searchQuery = `${lastUserText} [context: ${recentContext}]`;
     }
 
-    // RAG: retrieve relevant context using conversation-aware query
+    // ── RAG retrieval (best-effort — non-fatal) ────────────────
     let knowledge = "";
     try {
       if (lastUserText.trim()) {
@@ -72,80 +87,40 @@ export async function POST(req: NextRequest) {
       console.warn("[Chat] RAG retrieval failed, continuing without context:", err);
     }
 
-    const systemPrompt = getChatSystemPrompt({ knowledge: knowledge || undefined });
+    // ── System prompt ──────────────────────────────────────────
+    const today = new Date().toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    });
 
-    // Convert UIMessage parts to model messages
-    const modelMessages = messages
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.parts
-          ?.filter((p) => p.type === "text")
-          .map((p) => p.text || "")
-          .join("\n") || "",
-      }));
+    const systemPrompt = getChatSystemPrompt({
+      knowledge: knowledge || undefined,
+      today,
+    });
+
+    // ── Convert UIMessages → ModelMessages ─────────────────────
+    // Passing tools here lets the SDK correctly round-trip tool
+    // call / tool result pairs from previous conversation turns.
+    // The body is JSON-parsed so TypeScript can't verify the UIMessage
+    // discriminated union — cast is safe because useChat sends this shape.
+    const modelMessages = await convertToModelMessages(
+      messages as unknown as Omit<UIMessage, "id">[],
+      { tools: chatTools }
+    );
 
     const model = await getChatModel();
 
-    // Detect scheduling intent and pre-fetch slots
-    const isScheduling = /schedul|book|call|meet|interview|availab/i.test(lastUserText);
-    let bookingContext = "";
-    if (isScheduling) {
-      try {
-        const slots = await checkAvailability({});
-        bookingContext = `\n\n<available_slots>\n${formatSlotsForChat(slots, 8)}\n</available_slots>\n\nIMPORTANT: The user wants to schedule. Show them the available slots above and ask which one works. Also ask for their name and email to confirm the booking.`;
-      } catch (err) {
-        console.warn("[Chat] Failed to fetch slots:", err);
-      }
-    }
-
-    // Detect booking confirmation — user provided time + name + email in conversation
-    let bookingResult = "";
-    const allText = modelMessages.map(m => m.content).join("\n").toLowerCase();
-    const hasSlotContext = allText.includes("9:") || allText.includes("10:") || allText.includes("11:") || allText.includes("available slots");
-    const hasEmail = allText.match(/[\w.-]+@[\w.-]+\.\w+/);
-    const hasTimeConfirm = lastUserText.match(/\b(\d{1,2}:\d{2})\b/);
-
-    if (hasSlotContext && hasEmail && hasTimeConfirm) {
-      try {
-        // Extract booking details from conversation
-        const email = allText.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] || "";
-        const time = lastUserText.match(/(\d{1,2}:\d{2})/)?.[1] || "";
-        // Find the name — look for text before the email
-        const nameMatch = allText.match(/(?:name|i'm|i am|this is)\s+([a-z ]{2,30})/i) || allText.match(/^([a-z ]{2,30})\s*(?:email|@)/im);
-        const name = nameMatch?.[1]?.trim() || "Guest";
-
-        // Find matching slot from Cal.com
-        const slots = await checkAvailability({});
-        const targetHour = parseInt(time.split(":")[0]);
-        const targetMin = parseInt(time.split(":")[1]);
-        const matchingSlot = slots.find(s => {
-          const d = new Date(s.start);
-          const slotHour = d.getHours() || d.getUTCHours() + 5; // IST offset
-          const slotMin = d.getMinutes() || d.getUTCMinutes() + 30;
-          return Math.abs(((slotHour * 60 + slotMin) % (24*60)) - (targetHour * 60 + targetMin)) < 30;
-        });
-
-        if (matchingSlot && email) {
-          const booking = await createBooking({
-            startTime: matchingSlot.start,
-            attendeeName: sanitizeName(name),
-            attendeeEmail: sanitizeEmail(email),
-          });
-          const date = new Date(booking.startTime);
-          bookingResult = `\n\n<booking_confirmed>\nBooking confirmed! ${date.toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })} at ${date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })}. Confirmation sent to ${booking.attendeeEmail}.${booking.meetingUrl ? ` Meeting link: ${booking.meetingUrl}` : ""}\n</booking_confirmed>\n\nIMPORTANT: Tell the user their booking is confirmed with the details above. Be enthusiastic!`;
-        }
-      } catch (err) {
-        console.warn("[Chat] Booking failed:", err);
-      }
-    }
-
-    const finalSystem = systemPrompt + bookingContext + bookingResult;
-
+    // ── Stream with real tool calling ──────────────────────────
     const result = streamText({
       model,
-      system: finalSystem,
+      system: systemPrompt,
       messages: modelMessages,
+      tools: chatTools,
+      toolChoice: "auto",
+      stopWhen: stepCountIs(4),
     });
 
     return result.toUIMessageStreamResponse();

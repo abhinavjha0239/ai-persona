@@ -34,7 +34,7 @@ export interface VoiceProvider {
 }
 
 export interface WebhookResponse {
-  type: "tool_call" | "end_of_call" | "status_update" | "unknown";
+  type: "tool_call" | "end_of_call" | "status_update" | "assistant_request" | "unknown";
   data: Record<string, unknown>;
 }
 

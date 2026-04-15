@@ -91,11 +91,13 @@ export function formatSlotsForVoice(
       weekday: "long",
       month: "long",
       day: "numeric",
+      timeZone: "Asia/Kolkata",
     });
     const time = date.toLocaleTimeString("en-IN", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
     });
     return `${day} at ${time}`;
   });
@@ -124,11 +126,13 @@ export function formatSlotsForChat(
       weekday: "short",
       month: "short",
       day: "numeric",
+      timeZone: "Asia/Kolkata",
     });
     const time = date.toLocaleTimeString("en-IN", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
     });
     return `- **${day}** at ${time}`;
   });

@@ -82,14 +82,17 @@ export class CalComProvider implements CalendarProvider {
   }
 
   async createBooking(request: BookingRequest): Promise<BookingConfirmation> {
+    // Cal.com v2 response uses "start"/"end" (not "startTime"/"endTime")
     const data = await this.request<{
       status: string;
       data: {
         id: number;
         uid: string;
         status: string;
-        startTime: string;
-        endTime: string;
+        start?: string;
+        end?: string;
+        startTime?: string;
+        endTime?: string;
         meetingUrl?: string;
         attendees: { name: string; email: string }[];
       };
@@ -110,11 +113,13 @@ export class CalComProvider implements CalendarProvider {
       }),
     });
 
+    console.log("[Cal.com] Booking response fields:", Object.keys(data.data));
+
     return {
       id: data.data.uid,
       status: data.data.status === "ACCEPTED" ? "confirmed" : "pending",
-      startTime: data.data.startTime,
-      endTime: data.data.endTime,
+      startTime: data.data.start || data.data.startTime || request.startTime,
+      endTime: data.data.end || data.data.endTime || "",
       meetingUrl: data.data.meetingUrl,
       attendeeName: request.attendeeName,
       attendeeEmail: request.attendeeEmail,

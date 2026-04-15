@@ -76,9 +76,9 @@ export async function createBooking(
     throw new Error("Invalid email address");
   }
 
-  // Don't allow booking in the past
+  // Don't allow booking in the past (checks both date AND time)
   if (new Date(input.startTime) < new Date()) {
-    throw new Error("Cannot book a slot in the past");
+    throw new Error("That time has already passed. Please pick a future time.");
   }
 
   const calendar = await getCalendarProvider();
