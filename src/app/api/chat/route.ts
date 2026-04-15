@@ -60,49 +60,52 @@ export async function POST(req: NextRequest) {
     const lastUserText = lastUserMsg ? getText(lastUserMsg) : "";
 
     let searchQuery = lastUserText;
+    let boosted = false;
 
-    // Query augmentation: boost retrieval for topic-specific questions
-    // Generic queries like "where did you study?" don't match well against
-    // chunks titled "Education" — adding domain keywords fixes this.
+    // Query augmentation: boost retrieval for topic-specific questions.
+    // Use full words OR word-start patterns (no trailing \b on prefixes).
     const lower = lastUserText.toLowerCase();
     const queryBoosts: [RegExp, string][] = [
-      [/\b(stud|educat|degree|university|college|school|graduat|campus|btech|bs\b|ms\b|pilani|bits)\b/i,
+      [/\b(education|study|studies|studied|student|degree|university|college|school|graduate|graduation|campus|btech|pilani|bits)\b/i,
         " education degree university BITS Pilani Scaler School of Technology Computer Science"],
-      [/\b(work|experience|intern|job|company|employ|career)\b/i,
+      [/\b(work|experience|intern|internship|job|company|employ|career|background)\b/i,
         " work experience Kugelblitz Scaler Innovation Lab backend engineer"],
-      [/\b(skill|tech|stack|language|framework|tool|proficien)\b/i,
+      [/\b(skill|skills|tech|stack|language|languages|framework|tool|tools|proficien)/i,
         " skills languages Go Python TypeScript Redis Docker"],
-      [/\b(achieve|award|hackathon|prize|winner|accomplish)\b/i,
+      [/\b(achieve|achievement|award|hackathon|prize|winner|accomplish)/i,
         " achievements hackathon winner prize Scaler AI Labs"],
     ];
     for (const [pattern, boost] of queryBoosts) {
       if (pattern.test(lower)) {
         searchQuery = lastUserText + boost;
+        boosted = true;
         break;
       }
     }
 
-    // Only add conversation context when the query is ambiguous (short, or contains
-    // pronouns/references like "that", "it", "more", "same"). Direct factual questions
-    // (education, dates, project names) retrieve better without noisy prior-turn context.
-    const isAmbiguous = lastUserText.split(" ").length < 6
-      || /\b(that|it|this|more|same|those|them|there|above|previous)\b/i.test(lastUserText);
-    if (messages.length > 1 && lastUserText.trim() && isAmbiguous) {
-      const recentContext = messages
-        .slice(-4)
-        .map((m) => {
-          const text = getText(m);
-          return text.length > 200 ? text.slice(0, 200) : text;
-        })
-        .join(" | ");
-      searchQuery = `${lastUserText} [context: ${recentContext}]`;
+    // Only add conversation context when the query is ambiguous AND no
+    // topic boost matched. Boosted queries already have disambiguation
+    // keywords — adding prior-turn context would dilute the signal.
+    if (!boosted) {
+      const isAmbiguous = lastUserText.split(" ").length < 6
+        || /\b(that|it|this|more|same|those|them|there|above|previous)\b/i.test(lastUserText);
+      if (messages.length > 1 && lastUserText.trim() && isAmbiguous) {
+        const recentContext = messages
+          .slice(-4)
+          .map((m) => {
+            const text = getText(m);
+            return text.length > 200 ? text.slice(0, 200) : text;
+          })
+          .join(" | ");
+        searchQuery = `${searchQuery} [context: ${recentContext}]`;
+      }
     }
 
     // ── RAG retrieval (best-effort — non-fatal) ────────────────
     let knowledge = "";
     try {
       if (lastUserText.trim()) {
-        const topK = /\b(educat|stud|degree|experience|work|background)\b/i.test(lower) ? 8 : 6;
+        const topK = /\b(education|study|studies|degree|experience|work|background|college|university)\b/i.test(lower) ? 8 : 6;
         const { context } = await retrieveContext(searchQuery, topK);
         knowledge = context;
       }
