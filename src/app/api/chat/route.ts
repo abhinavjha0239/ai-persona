@@ -34,7 +34,7 @@ import { chatTools } from "@/lib/ai/chat-tools";
 export async function POST(req: NextRequest) {
   // ── Rate limiting ──────────────────────────────────────────
   const ip = getClientIp(req.headers);
-  const rl = checkRateLimit(`chat:${ip}`, RATE_LIMITS.slots);
+  const rl = checkRateLimit(`chat:${ip}`, RATE_LIMITS.chat);
   if (!rl.allowed) {
     return new Response(JSON.stringify({ error: "Too many requests" }), {
       status: 429,

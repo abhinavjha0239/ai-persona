@@ -4,8 +4,9 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
-import { Send, Loader2, Bot, User, RotateCcw, Search, Sparkles, Database } from "lucide-react";
+import { Send, Loader2, Bot, User, RotateCcw, Search, Sparkles, Database, Trash2 } from "lucide-react";
 import { ProjectCard, MetricsBar, TechChip, Timeline, CodeBlock } from "./RichComponents";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 // ============================================================
 // ChatWindow — Rich chat with streaming + visual components
@@ -18,29 +19,48 @@ const SUGGESTED_QUESTIONS = [
   "Can we schedule an interview?",
 ];
 
-// Dynamic follow-up pool — each used at most once
-const ALL_FOLLOW_UPS: { keywords: string[]; q: string }[] = [
-  { keywords: ["container", "isolation", "docker", "gvisor"], q: "How does Two-Container Isolation prevent test leakage?" },
-  { keywords: ["security", "cheating", "proctoring", "anti-cheat"], q: "How do you detect suspicious behavior during exams?" },
-  { keywords: ["scale", "concurrent", "grading", "redis streams"], q: "How does grading handle 200+ concurrent candidates?" },
-  { keywords: ["redis", "streams", "consumer", "worker", "crash"], q: "Walk me through Redis Streams failure recovery" },
-  { keywords: ["cost", "economics", "spot", "dollar"], q: "How did you optimize to $1-3 per candidate?" },
-  { keywords: ["adaface", "embedding", "face recognition", "attendance"], q: "Why AdaFace over ArcFace for embeddings?" },
-  { keywords: ["faiss", "index", "similarity", "search"], q: "How does FAISS batch-section scoping work?" },
-  { keywords: ["websocket", "real-time", "camera", "live"], q: "How does WebSocket real-time recognition work?" },
-  { keywords: ["deepskill", "graph", "interview", "agent"], q: "How does the Agent Graph Builder work?" },
-  { keywords: ["rubric", "evaluation", "chaos", "llm eval"], q: "How does rubric-based evaluation work in DeepSkill?" },
-  { keywords: ["kugelblitz", "payments", "kyc", "otp"], q: "What did you build at Kugelblitz?" },
-  { keywords: ["scaler innovation", "erp", "cloud run"], q: "Tell me about Scaler Innovation Lab" },
-  { keywords: ["hackathon", "winner", "1.5l", "rl task"], q: "How did you win the Scaler AI Labs Hackathon?" },
-  { keywords: ["education", "bits", "pilani", "degree"], q: "Tell me about your education" },
-  { keywords: ["circuit breaker", "codeforces", "cp-tracker"], q: "How does the circuit breaker in cp-tracker work?" },
-  { keywords: ["open source", "mentor", "gsoc"], q: "Tell me about your open source mentorship" },
-  { keywords: ["schedule", "call", "meeting", "book"], q: "Can we schedule an interview call?" },
-  { keywords: ["right person", "hire", "fit", "candidate"], q: "What's the most impressive thing you've built?" },
-  { keywords: ["dog", "tracker", "qr", "lost"], q: "How does the QR code lost-dog system work?" },
-  { keywords: ["sql", "raw", "postgresql", "os_tracker"], q: "Why raw SQL over an ORM in Os_Tracker?" },
+// Dynamic follow-up pool — topic + priority drive suggestion trajectory
+// priority: lower = more lucrative/impressive. CTA always last.
+const ALL_FOLLOW_UPS: { keywords: string[]; q: string; topic: string; priority: number }[] = [
+  // test-platform (crown jewel — priority 1)
+  { keywords: ["container", "isolation", "docker", "gvisor"], q: "How does Two-Container Isolation prevent test leakage?", topic: "test-platform", priority: 1 },
+  { keywords: ["security", "cheating", "proctoring", "anti-cheat"], q: "How do you detect suspicious behavior during exams?", topic: "test-platform", priority: 1 },
+  { keywords: ["scale", "concurrent", "grading", "redis streams"], q: "How does grading handle 200+ concurrent candidates?", topic: "test-platform", priority: 1 },
+  { keywords: ["redis", "streams", "consumer", "worker", "crash"], q: "Walk me through Redis Streams failure recovery", topic: "test-platform", priority: 1 },
+  { keywords: ["cost", "economics", "spot", "dollar"], q: "How did you optimize to $1-3 per candidate?", topic: "test-platform", priority: 1 },
+  // achievements (standout differentiators — priority 2)
+  { keywords: ["hackathon", "winner", "1.5l", "rl task"], q: "How did you win the Scaler AI Labs Hackathon?", topic: "achievements", priority: 2 },
+  { keywords: ["open source", "mentor", "gsoc"], q: "Tell me about your open source mentorship", topic: "achievements", priority: 2 },
+  // attendance — ML/CV depth (priority 3)
+  { keywords: ["adaface", "embedding", "face recognition", "attendance"], q: "Why AdaFace over ArcFace for embeddings?", topic: "attendance", priority: 3 },
+  { keywords: ["faiss", "index", "similarity", "search"], q: "How does FAISS batch-section scoping work?", topic: "attendance", priority: 3 },
+  { keywords: ["websocket", "real-time", "camera", "live"], q: "How does WebSocket real-time recognition work?", topic: "attendance", priority: 3 },
+  // deepskill — AI product depth (priority 4)
+  { keywords: ["deepskill", "graph", "interview", "agent"], q: "How does the Agent Graph Builder work?", topic: "deepskill", priority: 4 },
+  { keywords: ["rubric", "evaluation", "chaos", "llm eval"], q: "How does rubric-based evaluation work in DeepSkill?", topic: "deepskill", priority: 4 },
+  // professional experience (priority 5)
+  { keywords: ["kugelblitz", "payments", "kyc", "otp"], q: "What did you build at Kugelblitz?", topic: "experience", priority: 5 },
+  { keywords: ["scaler innovation", "erp", "cloud run"], q: "Tell me about Scaler Innovation Lab", topic: "experience", priority: 5 },
+  // education (priority 6)
+  { keywords: ["education", "bits", "pilani", "degree"], q: "Tell me about your education", topic: "education", priority: 6 },
+  // other projects (priority 7)
+  { keywords: ["circuit breaker", "codeforces", "cp-tracker"], q: "How does the circuit breaker in cp-tracker work?", topic: "other", priority: 7 },
+  { keywords: ["dog", "tracker", "qr", "lost"], q: "How does the QR code lost-dog system work?", topic: "other", priority: 7 },
+  { keywords: ["sql", "raw", "postgresql", "os_tracker"], q: "Why raw SQL over an ORM in Os_Tracker?", topic: "other", priority: 7 },
+  // CTA — always available but low priority (priority 8)
+  { keywords: ["schedule", "call", "meeting", "book"], q: "Can we schedule an interview call?", topic: "cta", priority: 8 },
+  { keywords: ["right person", "hire", "fit", "candidate"], q: "What's the most impressive thing you've built?", topic: "cta", priority: 8 },
 ];
+
+// Topic entry questions — the best first question to open each new topic
+const TOPIC_OPENERS: Record<string, string> = {
+  "test-platform": "Tell me about your test-platform architecture",
+  "achievements": "How did you win the Scaler AI Labs Hackathon?",
+  "attendance": "Tell me about the face recognition attendance system",
+  "deepskill": "How does the Agent Graph Builder work?",
+  "experience": "What did you build at Kugelblitz?",
+  "education": "Tell me about your education",
+};
 
 // Broad opening questions — used when conversation just started (≤2 messages)
 const OPENING_FOLLOW_UPS = [
@@ -59,17 +79,72 @@ function getFollowUps(lastText: string, allTexts: string[], messageCount: number
   const discussed = allTexts.join(" ").toLowerCase();
   const last = lastText.toLowerCase();
 
-  const scored = ALL_FOLLOW_UPS
-    .filter(f => !discussed.includes(f.q.toLowerCase().slice(0, 25)))
-    .map(f => ({ ...f, rel: f.keywords.filter(k => last.includes(k)).length }))
-    .sort((a, b) => b.rel - a.rel);
+  const available = ALL_FOLLOW_UPS.filter(f => !discussed.includes(f.q.toLowerCase().slice(0, 25)));
 
-  // 1 related to what was just discussed + 1 exploring something new
-  const related = scored.find(s => s.rel > 0);
-  const fresh = scored.find(s => s.rel === 0);
+  const scored = available.map(f => ({
+    ...f,
+    rel: f.keywords.filter(k => last.includes(k)).length,
+    ctxRel: f.keywords.filter(k => discussed.includes(k)).length,
+  }));
+
+  // 1. Best deep-dive for current thread (highest rel, then lowest priority number)
+  const related = scored
+    .filter(s => s.rel > 0)
+    .sort((a, b) => b.rel - a.rel || a.priority - b.priority)[0];
+
+  const currentTopic = related?.topic;
+
+  // Count how many items per topic have been explored (keywords in full context)
+  const exploredCountByTopic: Record<string, number> = {};
+  for (const f of ALL_FOLLOW_UPS) {
+    const hits = f.keywords.filter(k => discussed.includes(k)).length;
+    if (hits > 0) exploredCountByTopic[f.topic] = (exploredCountByTopic[f.topic] ?? 0) + 1;
+  }
+
+  // Topic is "saturated" when ≥2 of its follow-ups have been explored
+  const currentTopicSaturated = (exploredCountByTopic[currentTopic ?? ""] ?? 0) >= 2;
+
+  // 2. "Lucrative" fresh pick — navigate toward next high-value unexplored topic
+  //    a) If current topic is saturated: pivot to the highest-priority unexplored topic
+  //    b) Otherwise: another angle on the current topic (ctxRel > 0, not the same as related)
+  let fresh: (typeof scored)[0] | undefined;
+
+  if (currentTopicSaturated || !currentTopic) {
+    // Find highest-priority topic not yet explored, excluding cta
+    const unexploredTopics = Object.keys(TOPIC_OPENERS).filter(
+      t => t !== currentTopic && (exploredCountByTopic[t] ?? 0) === 0
+    );
+    const nextTopic = unexploredTopics.sort((a, b) => {
+      const pa = ALL_FOLLOW_UPS.find(f => f.topic === a)?.priority ?? 99;
+      const pb = ALL_FOLLOW_UPS.find(f => f.topic === b)?.priority ?? 99;
+      return pa - pb;
+    })[0];
+
+    if (nextTopic) {
+      // Use the opener question if it hasn't been asked, else best available from that topic
+      const openerQ = TOPIC_OPENERS[nextTopic];
+      const openerAsked = discussed.includes((openerQ ?? "").toLowerCase().slice(0, 25));
+      if (openerQ && !openerAsked) {
+        // Return a synthetic entry — wrap as a pseudo follow-up
+        fresh = { keywords: [], q: openerQ, topic: nextTopic, priority: 0, rel: 0, ctxRel: 0 };
+      } else {
+        fresh = scored.filter(s => s.topic === nextTopic).sort((a, b) => a.priority - b.priority)[0];
+      }
+    }
+  }
+
+  // Same-topic angle: if not pivoting, dig deeper into current topic
+  if (!fresh) {
+    fresh = scored
+      .filter(s => s.ctxRel > 0 && s.rel === 0 && s.topic !== "cta" && s !== related)
+      .sort((a, b) => a.priority - b.priority)[0]
+      ?? scored.filter(s => s.rel === 0 && s.topic !== "cta" && s !== related)
+          .sort((a, b) => a.priority - b.priority)[0];
+  }
+
   const results: string[] = [];
   if (related) results.push(related.q);
-  if (fresh) results.push(fresh.q);
+  if (fresh && fresh.q !== related?.q) results.push(fresh.q);
   if (results.length === 0) results.push("What makes you different?", "Can we schedule a call?");
   return results;
 }
@@ -107,9 +182,9 @@ function detectProjectMentions(text: string): string[] {
   if (lower.includes("test-platform") || lower.includes("coding assessment") || lower.includes("grading engine")) found.push("test-platform");
   if (lower.includes("deepskill") || lower.includes("ai interview")) found.push("deepskill");
   if ((lower.includes("attendance") || lower.includes("face recognition")) && lower.includes("adaface")) found.push("attendance");
-  if (lower.includes("cp-tracker") || lower.includes("cp tracker") || lower.includes("codeforces") && lower.includes("tracker")) found.push("cp-tracker");
+  if (lower.includes("cp-tracker") || lower.includes("cp tracker") || (lower.includes("codeforces") && lower.includes("tracker"))) found.push("cp-tracker");
   if (lower.includes("os_tracker") || lower.includes("os tracker") || lower.includes("contribution tracker")) found.push("os-tracker");
-  if (lower.includes("dog tracker") || lower.includes("dog-tracker") || lower.includes("qr code") && lower.includes("lost")) found.push("dog-tracker");
+  if (lower.includes("dog tracker") || lower.includes("dog-tracker") || (lower.includes("qr code") && lower.includes("lost"))) found.push("dog-tracker");
   return found;
 }
 
@@ -133,10 +208,18 @@ function shouldShowTimeline(text: string): boolean {
 }
 
 // ============================================================
-// Main ChatWindow
+// Main ChatWindow (exported with error boundary)
 // ============================================================
 export function ChatWindow() {
-  const { messages, sendMessage, status, error, regenerate } = useChat({ transport });
+  return (
+    <ErrorBoundary>
+      <ChatWindowInner />
+    </ErrorBoundary>
+  );
+}
+
+function ChatWindowInner() {
+  const { messages, sendMessage, status, error, regenerate, setMessages } = useChat({ transport });
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -171,12 +254,26 @@ export function ChatWindow() {
     const trimmed = text.trim();
     if (!trimmed || isBusy) return;
     setInput("");
+    if (inputRef.current) inputRef.current.style.height = "44px";
     sendMessage({ text: trimmed });
   }, [isBusy, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(input); }
   };
+
+  const handleClearChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    if (inputRef.current) inputRef.current.style.height = "44px";
+  }, [setMessages]);
+
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    const el = e.target;
+    el.style.height = "44px";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, []);
 
   const allTexts = useMemo(() =>
     messages.map(m => getMessageText(m.parts as { type: string; text?: string }[])),
@@ -190,38 +287,19 @@ export function ChatWindow() {
   return (
     <div className="flex flex-col h-full bg-white">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-        {/* Auto-greeting from the bot */}
+        {/* Welcome screen — single consolidated section */}
         {messages.length === 0 && !isBusy && (
-          <div className="animate-fade-in">
-            <div className="max-w-2xl mx-auto">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center flex-shrink-0">
-                  <Bot className="w-3 h-3" />
-                </div>
-                <span className="text-xs font-medium text-gray-500">Abhinav&apos;s AI</span>
-              </div>
-              <div className="ml-8 text-sm text-gray-800 leading-relaxed">
-                <p>Hey! I&apos;m Abhinav&apos;s AI persona — built with RAG over his real resume, GitHub repos, and source code.</p>
-                <p className="mt-2">Quick highlights: he&apos;s currently building a <strong>secure coding assessment platform</strong> that&apos;s pilot testing at Scaler SST (Go, Redis Streams, gVisor container isolation). Before that — production Go services at <strong>Kugelblitz</strong> and a face recognition attendance system at <strong>Scaler Innovation Lab</strong>.</p>
-                <p className="mt-2 text-gray-500">Ask me anything about his background, projects, or skills — or we can schedule a call.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Welcome suggestions */}
-        {messages.length === 0 && !isBusy && (
-          <div className="flex flex-col items-center justify-center h-full gap-5 text-center animate-fade-in">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-5 text-center animate-fade-in px-2">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/20">
               AJ
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Abhinav Kumar Jha</h2>
               <p className="text-sm text-gray-500 max-w-md">
-                Backend / Systems Engineer. Building secure, high-concurrency platforms in Go, Python & TypeScript.
+                AI / ML Engineer — RAG-grounded over real resume, GitHub repos, and source code.
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5 justify-center">
+            <div className="flex flex-wrap gap-1.5 justify-center max-w-sm">
               {["Go", "Python", "TypeScript", "Redis", "Docker", "gVisor", "PostgreSQL", "FAISS"].map(t =>
                 <TechChip key={t} name={t} />
               )}
@@ -231,7 +309,7 @@ export function ChatWindow() {
               <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> RAG-grounded</span>
               <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-green-400 rounded-full" /> Live</span>
             </div>
-            <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+            <div className="flex flex-wrap gap-2 justify-center max-w-lg mt-2">
               {SUGGESTED_QUESTIONS.map((q) => (
                 <button key={q} onClick={() => handleSend(q)}
                   className="text-xs px-3 py-2 rounded-full border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200">
@@ -381,15 +459,21 @@ export function ChatWindow() {
       {/* Input */}
       <div className="border-t border-gray-100 bg-white px-4 py-3">
         <form onSubmit={(e) => { e.preventDefault(); handleSend(input); }} className="flex items-end gap-2 max-w-2xl mx-auto">
+          {messages.length > 0 && (
+            <button type="button" onClick={handleClearChat} title="New conversation"
+              className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
           <textarea ref={inputRef} value={input}
-            onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+            onChange={handleTextareaChange} onKeyDown={handleKeyDown}
             placeholder="Ask me anything..." rows={1}
             className={cn("flex-1 resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm",
               "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
               "placeholder:text-gray-400 max-h-32")}
             style={{ minHeight: "44px" }} disabled={isBusy} />
           <button type="submit" disabled={isBusy || !input.trim()}
-            className={cn("flex items-center justify-center w-10 h-10 rounded-xl transition-colors",
+            className={cn("flex items-center justify-center w-10 h-10 rounded-xl transition-colors flex-shrink-0",
               input.trim() && !isBusy ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-100 text-gray-400")}>
             {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
@@ -498,7 +582,7 @@ function TextBlock({ text }: { text: string }) {
     }
     if (line.match(/^### /)) {
       elements.push(
-        <div key={i} className="mt-4 mb-1.5 bg-gradient-to-r from-blue-50/60 to-transparent rounded-lg px-3 py-2 border-l-3 border-blue-400">
+        <div key={i} className="mt-4 mb-1.5 bg-gradient-to-r from-blue-50/60 to-transparent rounded-lg px-3 py-2 border-l-4 border-blue-400">
           <h4 className="font-semibold text-gray-900 text-[15px]">{processInline(line.replace(/^### /, ""))}</h4>
         </div>
       );

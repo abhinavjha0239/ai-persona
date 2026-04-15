@@ -122,6 +122,20 @@ ${contextBlocks}
 }
 
 /**
+ * Pre-initialize the database connection pool.
+ * Called once at server boot via instrumentation.ts so the first real
+ * request never pays the TLS handshake cost (~200–300ms on Azure PG).
+ */
+export async function warmPool(): Promise<void> {
+  try {
+    await getPool().query("SELECT 1");
+  } catch (err) {
+    // Non-fatal — server still starts, first request just pays the cost
+    console.warn("[Retriever] Pool warm-up failed:", err);
+  }
+}
+
+/**
  * Full RAG retrieval pipeline.
  */
 export async function retrieveContext(

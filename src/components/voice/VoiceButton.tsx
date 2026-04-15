@@ -84,9 +84,20 @@ export function VoiceButton() {
         </button>
       )}
 
-      {/* Error message */}
+      {/* Error message with guidance */}
       {error && (
-        <p className="text-sm text-red-500 text-center max-w-xs">{error}</p>
+        <div className="text-center max-w-xs">
+          <p className="text-sm text-red-500">{error}</p>
+          {error.toLowerCase().includes("microphone") || error.toLowerCase().includes("permission") || error.toLowerCase().includes("notallowed") ? (
+            <p className="text-xs text-gray-500 mt-1">
+              Please allow microphone access in your browser settings and try again.
+            </p>
+          ) : error.toLowerCase().includes("network") || error.toLowerCase().includes("connect") ? (
+            <p className="text-xs text-gray-500 mt-1">
+              Check your internet connection and try again.
+            </p>
+          ) : null}
+        </div>
       )}
 
       {/* Live transcript */}

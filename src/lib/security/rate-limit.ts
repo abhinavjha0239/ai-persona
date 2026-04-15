@@ -95,6 +95,7 @@ export function getClientIp(headers: Headers): string {
 // Pre-configured limiters for different route types
 export const RATE_LIMITS = {
   webhook: { limit: 60, windowSeconds: 60 },     // 60 req/min — voice platforms fire rapidly
+  chat: { limit: 40, windowSeconds: 60 },         // 40 req/min — generous for evaluator testing
   booking: { limit: 10, windowSeconds: 60 },      // 10 req/min — prevent spam bookings
   slots: { limit: 30, windowSeconds: 60 },         // 30 req/min — availability checks
   token: { limit: 20, windowSeconds: 60 },         // 20 req/min — token fetches

@@ -1,23 +1,19 @@
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
-import { Phone, MessageSquare, Code2, FileText } from "lucide-react";
-
-// ============================================================
-// Landing Page — AI Persona Hub
-// ============================================================
+import { Phone, MessageSquare, Code2, FileText, PhoneCall } from "lucide-react";
 
 export default function Home() {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-white px-4">
       {/* Hero */}
       <section className="text-center max-w-2xl mx-auto pt-16 pb-12">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mx-auto mb-6 flex items-center justify-center text-white text-2xl font-bold">
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mx-auto mb-6 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-blue-500/20">
           AJ
         </div>
         <h1 className="text-4xl font-bold text-gray-900 mb-3">
           Abhinav Jha
         </h1>
-        <p className="text-lg text-gray-600 mb-1">Backend / Systems Engineer</p>
+        <p className="text-lg text-gray-600 mb-1">AI / ML Engineer</p>
         <p className="text-sm text-gray-400 mb-4">
           Talk to my AI representative — voice or chat
         </p>
@@ -32,7 +28,7 @@ export default function Home() {
       </section>
 
       {/* Voice Call Section */}
-      <section className="w-full max-w-md mx-auto mb-12">
+      <section className="w-full max-w-md mx-auto mb-8">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <div className="flex items-center gap-2 mb-6 justify-center">
             <Phone className="w-5 h-5 text-green-500" />
@@ -48,6 +44,22 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Phone Number Callout */}
+      <section className="w-full max-w-md mx-auto mb-12">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-4 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+            <PhoneCall className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Or call directly</p>
+            <a href="tel:+14157779148" className="text-lg font-bold text-green-900 hover:text-green-700 transition-colors">
+              +1 (415) 777-9148
+            </a>
+            <p className="text-xs text-green-600 mt-0.5">Vapi-powered AI voice agent — available 24/7</p>
+          </div>
+        </div>
+      </section>
+
       {/* Navigation Cards */}
       <section className="w-full max-w-2xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
         <NavCard
@@ -57,17 +69,18 @@ export default function Home() {
           description="Text-based conversation with RAG-grounded answers"
         />
         <NavCard
-          href="https://github.com/abhinavjha0239"
+          href="https://github.com/abhinavjha0239/ai-persona"
           icon={<Code2 className="w-5 h-5" />}
           title="GitHub"
           description="View the source code and architecture"
           external
         />
         <NavCard
-          href="/docs/eval-report.pdf"
+          href="https://github.com/abhinavjha0239/ai-persona/blob/main/docs/eval/eval-report.md"
           icon={<FileText className="w-5 h-5" />}
           title="Eval Report"
           description="Voice quality, chat groundedness, failure modes"
+          external
         />
       </section>
 
@@ -78,7 +91,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-gray-400 pb-8">
-        Built with Next.js, Vapi, Azure OpenAI (GPT-4.1), and pgvector | 188 knowledge chunks
+        Built with Next.js, Vapi, Azure OpenAI (GPT-4.1-mini), and pgvector | 188 knowledge chunks
       </footer>
     </main>
   );

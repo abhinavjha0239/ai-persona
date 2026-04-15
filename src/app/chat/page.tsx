@@ -17,21 +17,21 @@ export const metadata = {
 
 export default function ChatPage() {
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-dvh bg-white">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white">
+      <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
         <Link
           href="/"
-          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 -ml-1"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             AJ
           </div>
-          <div>
-            <h1 className="text-sm font-semibold text-gray-900">
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold text-gray-900 truncate">
               Abhinav Jha — AI Persona
             </h1>
             <p className="text-xs text-gray-500">
@@ -39,9 +39,9 @@ export default function ChatPage() {
             </p>
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-xs text-gray-500">Online</span>
+          <span className="text-xs text-gray-500 hidden sm:inline">Online</span>
         </div>
       </header>
 
