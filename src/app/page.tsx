@@ -91,7 +91,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-gray-400 pb-8">
-        Built with Next.js, Vapi, Azure OpenAI (GPT-4.1-mini), and pgvector | 188 knowledge chunks
+        Built with Next.js, Vapi, Azure OpenAI (GPT-5.4-mini), and pgvector | 188 knowledge chunks
       </footer>
     </main>
   );

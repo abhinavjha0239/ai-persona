@@ -140,9 +140,8 @@ export class VapiVoiceProvider implements VoiceProvider {
       name: config.name,
       model: {
         provider: "custom-llm" as const,
-        // Use Azure OpenAI gpt-4.1-mini — lowest latency for voice
-        model: "azure-openai/gpt-4.1-mini",
-        url: `https://${process.env.AZURE_OPENAI_RESOURCE_NAME}.openai.azure.com/openai/deployments/${process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-4.1-mini"}/chat/completions?api-version=2024-06-01`,
+        model: "azure-openai/gpt-5-4-mini",
+        url: `https://${process.env.AZURE_OPENAI_RESOURCE_NAME}.openai.azure.com/openai/deployments/${process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-5-4-mini"}/chat/completions?api-version=2024-06-01`,
         messages: [{ role: "system", content: config.systemPrompt }],
         tools: vapiTools,
         temperature: 0.5,

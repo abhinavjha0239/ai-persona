@@ -24,7 +24,7 @@ export async function getChatModel() {
         resourceName: process.env.AZURE_OPENAI_RESOURCE_NAME,
         apiKey: process.env.AZURE_OPENAI_API_KEY,
       });
-      return azure(process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-4.1-mini");
+      return azure(process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-5-4-mini");
     }
     case "openai": {
       const { openai } = await import("@ai-sdk/openai");

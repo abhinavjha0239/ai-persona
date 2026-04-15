@@ -16,7 +16,7 @@ export class AzureOpenAILLMProvider implements LLMProvider {
   }
 
   private get deployment(): string {
-    return process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-4.1-mini";
+    return process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || "gpt-5-4-mini";
   }
 
   async streamChat(messages: LLMMessage[], options?: LLMStreamOptions): Promise<ReadableStream> {

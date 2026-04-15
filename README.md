@@ -47,7 +47,7 @@ An AI-powered digital representative that can answer questions about my backgrou
         ▼                  ▼                  ▼
 ┌──────────────┐  ┌──────────────────┐  ┌──────────────┐
 │ Azure OpenAI │  │ Azure OpenAI     │  │  Cal.com      │
-│ GPT-4.1-mini │  │ GPT-4.1-mini     │  │  Calendar API │
+│ GPT-5.4-mini │  │ GPT-5.4-mini     │  │  Calendar API │
 │ (Voice LLM)  │  │ (Chat LLM)       │  │  Real Booking │
 └──────────────┘  └──────────────────┘  └──────────────┘
 ```
@@ -72,7 +72,7 @@ The RAG pipeline ingests real data — no hardcoded answers:
 |-------|-----------|-----|
 | **Frontend** | Next.js 16, React 19, Tailwind CSS 4 | Streaming UI, server components, fast iteration |
 | **Voice** | Vapi (orchestration) + Deepgram (STT) + ElevenLabs (TTS) | Low-latency voice with interruption handling |
-| **LLM** | Azure OpenAI GPT-4.1-mini | Tool calling, structured output, cost-efficient |
+| **LLM** | Azure OpenAI GPT-5.4-mini | Tool calling, structured output, cost-efficient |
 | **RAG** | pgvector on Azure PostgreSQL | Hybrid search: BM25 full-text + vector similarity with RRF fusion |
 | **Embeddings** | Azure OpenAI text-embedding-3-small (1536d) | High quality, native Azure integration |
 | **Calendar** | Cal.com API v2 | Free tier, full API, real booking confirmation |

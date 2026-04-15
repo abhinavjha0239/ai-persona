@@ -50,7 +50,7 @@ const envSchema = z.object({
   // Azure OpenAI
   AZURE_OPENAI_API_KEY: z.string().optional(),
   AZURE_OPENAI_RESOURCE_NAME: z.string().optional(),
-  AZURE_OPENAI_CHAT_DEPLOYMENT: z.string().default("gpt-4.1-mini"),
+  AZURE_OPENAI_CHAT_DEPLOYMENT: z.string().default("gpt-5-4-mini"),
   AZURE_OPENAI_EMBEDDING_DEPLOYMENT: z.string().default("text-embedding-3-small"),
 
   // TTS

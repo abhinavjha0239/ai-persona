@@ -60,6 +60,28 @@ export async function POST(req: NextRequest) {
     const lastUserText = lastUserMsg ? getText(lastUserMsg) : "";
 
     let searchQuery = lastUserText;
+
+    // Query augmentation: boost retrieval for topic-specific questions
+    // Generic queries like "where did you study?" don't match well against
+    // chunks titled "Education" — adding domain keywords fixes this.
+    const lower = lastUserText.toLowerCase();
+    const queryBoosts: [RegExp, string][] = [
+      [/\b(stud|educat|degree|university|college|school|graduat|campus|btech|bs\b|ms\b|pilani|bits)\b/i,
+        " education degree university BITS Pilani Scaler School of Technology Computer Science"],
+      [/\b(work|experience|intern|job|company|employ|career)\b/i,
+        " work experience Kugelblitz Scaler Innovation Lab backend engineer"],
+      [/\b(skill|tech|stack|language|framework|tool|proficien)\b/i,
+        " skills languages Go Python TypeScript Redis Docker"],
+      [/\b(achieve|award|hackathon|prize|winner|accomplish)\b/i,
+        " achievements hackathon winner prize Scaler AI Labs"],
+    ];
+    for (const [pattern, boost] of queryBoosts) {
+      if (pattern.test(lower)) {
+        searchQuery = lastUserText + boost;
+        break;
+      }
+    }
+
     // Only add conversation context when the query is ambiguous (short, or contains
     // pronouns/references like "that", "it", "more", "same"). Direct factual questions
     // (education, dates, project names) retrieve better without noisy prior-turn context.
@@ -80,7 +102,8 @@ export async function POST(req: NextRequest) {
     let knowledge = "";
     try {
       if (lastUserText.trim()) {
-        const { context } = await retrieveContext(searchQuery, 6);
+        const topK = /\b(educat|stud|degree|experience|work|background)\b/i.test(lower) ? 8 : 6;
+        const { context } = await retrieveContext(searchQuery, topK);
         knowledge = context;
       }
     } catch (err) {
