@@ -68,9 +68,9 @@ export const chatTools = {
   check_availability: tool({
     description:
       "Check Abhinav's available meeting slots. " +
-      "Call this IMMEDIATELY when the user mentions scheduling, wants to book a call, " +
-      "or asks about availability. Do not ask the user for a time preference first — " +
-      "fetch real slots and present them.",
+      "Call this ONLY after the user has given a preferred day/time. " +
+      "If the user just says they want to schedule, ask for their preferred time first — " +
+      "do NOT call this tool until they specify a day or time.",
     inputSchema: zodSchema(checkAvailabilitySchema),
     execute: async (args: CheckAvailabilityArgs): Promise<string> => {
       const { requestedTime, startDate, endDate } = args;
@@ -105,10 +105,19 @@ export const chatTools = {
             return `Yes, ${fmtDate} at ${fmtTime} IST is available.`;
           }
 
-          // Not free — show nearby alternatives on that day
+          // Not free — show alternatives closest to the requested time, sorted chronologically
           if (slots.length > 0) {
-            const nearby = formatSlotsForChat(slots.slice(0, 6));
-            return `That exact time isn't available. Here are the open slots I have on that day:\n\n${nearby}`;
+            const byProximity = [...slots].sort(
+              (a, b) =>
+                Math.abs(new Date(a.start).getTime() - reqMs) -
+                Math.abs(new Date(b.start).getTime() - reqMs)
+            );
+            // Take the 8 nearest, then sort them chronologically for display
+            const nearest = byProximity.slice(0, 8).sort(
+              (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+            );
+            const nearby = formatSlotsForChat(nearest, 8);
+            return `That exact time isn't available. Here are the closest open slots on that day:\n\n${nearby}`;
           }
 
           return "No slots are available on that day. Would you like to try a different date?";
@@ -168,6 +177,14 @@ export const chatTools = {
         if (booking.meetingUrl) {
           lines.push(`🔗 Meeting link: ${booking.meetingUrl}`);
         }
+        // Machine-readable suffix for rich UI card rendering
+        const bookingMeta = [
+          booking.startTime,
+          booking.attendeeName,
+          booking.attendeeEmail,
+          booking.meetingUrl || "",
+        ].join("|");
+        lines.push(`[BOOKING|${bookingMeta}]`);
         return lines.join("\n");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

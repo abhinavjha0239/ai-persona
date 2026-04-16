@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
-import { Send, Loader2, Bot, User, RotateCcw, Search, Sparkles, Database, Trash2 } from "lucide-react";
+import { Send, Loader2, Bot, User, RotateCcw, Search, Sparkles, Database, Trash2, CheckCircle2, Calendar, Mail, Video, Clock } from "lucide-react";
 import { ProjectCard, MetricsBar, TechChip, Timeline, CodeBlock } from "./RichComponents";
 import { ErrorBoundary } from "./ErrorBoundary";
 
@@ -365,10 +365,19 @@ function ChatWindowInner() {
                     const ti = (part as { type: string; toolInvocation: { toolCallId: string; toolName: string; state: string; result?: unknown; output?: unknown } }).toolInvocation;
                     const result = ti?.result || ti?.output;
                     const isDone = ti?.state === "result" || ti?.state === "output" || result != null;
+
+                    // Rich booking card for confirmed bookings
+                    if (isDone && result && ti?.toolName === "create_booking") {
+                      const booking = parseBookingData(String(result));
+                      if (booking) {
+                        return <BookingCard key={ti?.toolCallId || idx} {...booking} />;
+                      }
+                    }
+
                     return (
                       <div key={ti?.toolCallId || idx} className="mt-2 text-sm">
                         {isDone && result ? (
-                          <EnhancedMarkdown content={String(result)} />
+                          <EnhancedMarkdown content={String(result).replace(/\[BOOKING\|[^\]]*\]/g, "").trim()} />
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-gray-400">
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -382,9 +391,38 @@ function ChatWindowInner() {
 
                 {/* Rich components — show at most ONE type to avoid clutter */}
                 {(() => {
-                  if (message.role !== "assistant") return null;
-                  // Priority: metrics (only if ≤4, focused) > project cards (only if exactly 1 project) > timeline
-                  // Skip all if text is very long (listing many projects = overview, not deep dive)
+                  if (message.role !== "assistant" || isCurrentlyStreaming) return null;
+
+                  // Booking confirmation → rich card with countdown
+                  const booking = detectBookingFromText(text);
+                  if (booking) {
+                    return (
+                      <BookingCard
+                        startTime={booking.startDate?.toISOString() ?? ""}
+                        name=""
+                        email={booking.email}
+                        meetingUrl={booking.meetingUrl}
+                        dateLabel={booking.dateStr}
+                      />
+                    );
+                  }
+
+                  // Available slots → clickable time chips
+                  const slotTimes = detectSlotTimes(text);
+                  if (slotTimes.length > 0) {
+                    return (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {slotTimes.map((t) => (
+                          <button key={t} onClick={() => handleSend(t)}
+                            className="text-xs px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 font-medium transition-all duration-150 cursor-pointer">
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  // Priority: metrics > project cards > timeline
                   const isOverview = text.length > 1200 || projectMentions.length > 2;
                   if (!isOverview && metrics.length >= 2 && metrics.length <= 4) {
                     return <MetricsBar metrics={metrics} />;
@@ -484,6 +522,83 @@ function ChatWindowInner() {
 }
 
 // ============================================================
+// Booking confirmation card with countdown
+// ============================================================
+function parseBookingData(result: string): { startTime: string; name: string; email: string; meetingUrl: string | null } | null {
+  const match = result.match(/\[BOOKING\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]*)\]/);
+  if (!match) return null;
+  return { startTime: match[1], name: match[2], email: match[3], meetingUrl: match[4] || null };
+}
+
+function formatCountdown(startTime: string): string {
+  const diff = new Date(startTime).getTime() - Date.now();
+  if (diff <= 0) return "Starting now";
+  const days = Math.floor(diff / (86400000));
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  return parts.length ? `${parts.join(" ")} from now` : "Less than a minute";
+}
+
+function BookingCard({ startTime, name, email, meetingUrl, dateLabel }: { startTime: string; name: string; email: string; meetingUrl: string | null; dateLabel?: string }) {
+  const hasValidTime = startTime && !isNaN(new Date(startTime).getTime());
+  const date = hasValidTime ? new Date(startTime) : null;
+  const fmtDate = date ? date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" }) : "";
+  const fmtTime = date ? date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }) : "";
+  const countdown = hasValidTime ? formatCountdown(startTime) : null;
+
+  return (
+    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-5 my-3 shadow-sm">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
+          <CheckCircle2 className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <p className="font-bold text-green-900 text-base">Interview Confirmed</p>
+          {countdown && (
+            <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
+              <Clock className="w-3 h-3" />
+              <span>{countdown}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2.5 text-sm">
+        <div className="flex items-center gap-2.5 text-gray-800">
+          <Calendar className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <span className="font-medium">{date ? `${fmtDate} at ${fmtTime} IST` : dateLabel || "Scheduled"}</span>
+        </div>
+        {name && (
+          <div className="flex items-center gap-2.5 text-gray-700">
+            <User className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <span>{name}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2.5 text-gray-700">
+          <Mail className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <span>{email}</span>
+        </div>
+        {meetingUrl && (
+          <a href={meetingUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2.5 text-blue-600 hover:text-blue-800 font-medium transition-colors">
+            <Video className="w-4 h-4 flex-shrink-0" />
+            <span>Join Meeting Link</span>
+          </a>
+        )}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-green-200 text-xs text-green-600">
+        Calendar invite sent — check your inbox
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // Enhanced Markdown with code blocks + rich text
 // ============================================================
 function EnhancedMarkdown({ content, streaming = false }: { content: string; streaming?: boolean }) {
@@ -507,7 +622,7 @@ function EnhancedMarkdown({ content, streaming = false }: { content: string; str
 
 // --- Skill line detector: "Languages: Go, Python, ..." ---
 function isSkillLine(line: string): { label: string; items: string[] } | null {
-  const match = line.match(/^(?:Languages|Skills|Databases|Infra|Backend|Frontend|Systems|ML\/AI|Tools|Cache):\s*(.+)/i);
+  const match = line.replace(/\*\*/g, "").match(/^(?:Languages|Skills|Databases|Infra|Backend|Frontend|Systems|ML\/AI|Tools|Cache):\s*(.+)/i);
   if (match) {
     return { label: match[0].split(":")[0], items: match[1].split(/[,·•|]+/).map(t => t.trim()).filter(Boolean) };
   }
@@ -596,7 +711,7 @@ function TextBlock({ text }: { text: string }) {
     }
 
     // --- "Stack:" or "Tech:" lines → render as colored tech chips ---
-    const stackMatch = line.match(/^(?:Stack|Tech|Technologies):\s*(.+)/i);
+    const stackMatch = line.replace(/\*\*/g, "").match(/^(?:Stack|Tech|Technologies):\s*(.+)/i);
     if (stackMatch) {
       const techs = stackMatch[1].split(/[,·•|]+/).map(t => t.trim()).filter(Boolean);
       elements.push(
@@ -680,8 +795,8 @@ function TextBlock({ text }: { text: string }) {
 }
 
 function processInline(text: string): React.ReactNode {
-  // Split on bold, inline code, and links
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
+  // Split on bold, inline code, markdown links, and bare URLs
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s,)]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
@@ -703,6 +818,69 @@ function processInline(text: string): React.ReactNode {
         </a>
       );
     }
+    // Bare URLs → clickable links
+    if (/^https?:\/\//.test(part)) {
+      const clean = part.replace(/[.,;!?)]+$/, "");
+      return (
+        <a key={i} href={clean} target="_blank" rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-700 underline underline-offset-2 break-all">
+          {clean}
+        </a>
+      );
+    }
     return part;
   });
+}
+
+// ============================================================
+// Detect booking confirmation from assistant text
+// ============================================================
+function detectBookingFromText(text: string): { dateStr: string; email: string; meetingUrl: string | null; startDate: Date | null } | null {
+  if (!/\b(confirmed|booked)\b/i.test(text)) return null;
+  const emailMatch = text.match(/[\w.-]+@[\w.-]+\.\w{2,}/);
+  // Must have email AND either a cal.com link or mention of "confirmation" to be a real booking
+  if (!emailMatch) return null;
+
+  const urlMatch = text.match(/https?:\/\/\S*cal\.com\S*/);
+  const meetingUrl = urlMatch ? urlMatch[0].replace(/[.,;!?)]+$/, "") : null;
+
+  // Parse "Friday, 17 April at 2:15 PM IST" or similar
+  const dateMatch = text.match(/([A-Z][a-z]+day),?\s+(\d{1,2})\s+([A-Z][a-z]+)\s+at\s+(\d{1,2}):(\d{2})\s+(AM|PM)\s+IST/i);
+  let startDate: Date | null = null;
+  let dateStr = "";
+  if (dateMatch) {
+    dateStr = dateMatch[0];
+    let h = parseInt(dateMatch[4]);
+    if (dateMatch[6].toUpperCase() === "PM" && h !== 12) h += 12;
+    if (dateMatch[6].toUpperCase() === "AM" && h === 12) h = 0;
+    const year = new Date().getFullYear();
+    const d = new Date(`${dateMatch[3]} ${dateMatch[2]}, ${year} ${String(h).padStart(2, "0")}:${dateMatch[5]}:00`);
+    if (!isNaN(d.getTime())) startDate = d;
+  }
+
+  return { dateStr, email: emailMatch[0], meetingUrl, startDate };
+}
+
+// ============================================================
+// Detect available slot times from assistant text
+// ============================================================
+function detectSlotTimes(text: string): string[] {
+  // Don't show slot chips on booking confirmations
+  if (/\b(confirmed|booked)\b/i.test(text)) return [];
+  if (!/\b(available|open|slot|nearby|opening)/i.test(text)) return [];
+  const times = text.match(/\d{1,2}:\d{2}\s+(?:AM|PM)/gi);
+  if (!times) return [];
+  // Deduplicate and sort chronologically
+  const unique = [...new Set(times.map(t => t.toUpperCase()))];
+  unique.sort((a, b) => {
+    const parse = (s: string) => {
+      const [time, period] = s.split(/\s+/);
+      let [h, m] = time.split(":").map(Number);
+      if (period === "PM" && h !== 12) h += 12;
+      if (period === "AM" && h === 12) h = 0;
+      return h * 60 + m;
+    };
+    return parse(a) - parse(b);
+  });
+  return unique;
 }
