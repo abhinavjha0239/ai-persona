@@ -76,7 +76,7 @@ export default function Home() {
           external
         />
         <NavCard
-          href="https://github.com/abhinavjha0239/ai-persona/blob/main/docs/eval/part-c-eval-report.md"
+          href="https://github.com/abhinavjha0239/ai-persona/blob/master/docs/eval/part-c-eval-report.md"
           icon={<FileText className="w-5 h-5" />}
           title="Eval Report"
           description="Voice quality, chat groundedness, failure modes"
